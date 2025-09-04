@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mini App Rewards</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+    #progress-bar { width: 100%; height: 20px; background: #ddd; border-radius: 10px; margin: 10px 0; }
+    #progress { height: 100%; width: 0%; background: green; border-radius: 10px; }
+    button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+  </style>
+  <!-- Monetag SDK -->
+  <script src='//libtl.com/sdk.js' data-zone='9796682' data-sdk='show_9796682'></script>
+</head>
+<body>
+  <h1>🚀 Earn Rewards!</h1>
+  <p>Total Clicks: <span id="clicks">0</span></p>
+  <p>Balance: <span id="balance">$0.000</span></p>
+  <div id="progress-bar"><div id="progress"></div></div>
+  <button onclick="creditReward()">Watch Ad & Earn</button>
+
+  <h2>Withdraw</h2>
+  <select id="method">
+    <option value="bkash">bKash</option>
+    <option value="nagad">Nagad</option>
+    <option value="bank">Bank</option>
+  </select>
+  <input id="account" placeholder="Enter account/number">
+  <button id="btnWithdraw" onclick="requestWithdraw()" disabled>Withdraw</button>
+
+  <pre id="log"></pre>
+
+<script>
+  const tg = window.Telegram?.WebApp || {};
+  const RATE = 0.001;  
+  const MIN_WITHDRAW = 2.0;
+  const API_BASE = "https://your-backend.onrender.com"; // 👉 তোমার backend URL বসাও
+
+  let local = { clicks: 0, balance: 0 };
+
+  function log(msg){ document.getElementById('log').textContent += msg + "\n"; }
+
+  async function refresh() {
+    try {
+      const r = await fetch(`${API_BASE}/api/me?initData=${encodeURIComponent(tg?.initData || '')}`);
+      if (r.ok) local = await r.json();
+    } catch (e) {}
+    document.getElementById('clicks').textContent = String(local.clicks || 0);
+    document.getElementById('balance').textContent = `$${Number(local.balance || 0).toFixed(3)}`;
+    const pct = Math.min(100, Math.floor(((local.balance || 0) / MIN_WITHDRAW) * 100));
+    document.getElementById('progress').style.width = pct + '%';
+    document.getElementById('btnWithdraw').disabled = !local.balance || local.balance < MIN_WITHDRAW;
+  }
+
+  async function creditReward() {
+    log('Crediting reward…');
+    try {
+      const r = await fetch(`${API_BASE}/api/credit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: tg?.initData || '' })
+      });
+      if (r.ok) local = await r.json();
+    } catch (e) {
+      local.clicks = (local.clicks || 0) + 1;
+      local.balance = Number(((local.balance || 0) + RATE).toFixed(3));
+    }
+    refresh();
+  }
+
+  async function requestWithdraw() {
+    const method = document.getElementById('method').value;
+    const account = document.getElementById('account').value.trim();
+    if (!account) { log('Enter account/number first.'); return; }
+    log('Submitting withdraw request…');
+    try {
+      const r = await fetch(`${API_BASE}/api/withdraw`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method, account, initData: tg?.initData || '' })
+      });
+      if (r.ok) {
+        const data = await r.json();
+        log('Withdraw request submitted ✅ Ticket: ' + (data.id || 'pending'));
+        await refresh();
+      } else {
+        log('Withdraw failed.');
+      }
+    } catch (e) { log('Network error.'); }
+  }
+
+  refresh();
+</script>
+</body>
+</html>
